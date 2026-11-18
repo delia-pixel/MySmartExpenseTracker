@@ -1,0 +1,28 @@
+
+
+erDiagram
+    ACCOUNTS ||--o{ TRANSACTIONS : has
+    CATEGORIES ||--o{ TRANSACTIONS : classifies
+
+    ACCOUNTS {
+        INTEGER account_id PK
+        TEXT account_name UK
+    }
+
+    CATEGORIES {
+        INTEGER category_id PK
+        TEXT category_name
+        TEXT category_type
+    }
+
+    TRANSACTIONS {
+        INTEGER transaction_id PK
+        TEXT transaction_date
+        TEXT description
+        REAL amount
+        TEXT transaction_type
+        INTEGER category_id FK
+        INTEGER account_id FK
+        TEXT custom_category
+    }
+  

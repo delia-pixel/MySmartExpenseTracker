@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h1>Transaction history</h1>
+
+<article>
+    <form method="GET" class="filters">
+
+        <label>
+            Type
+            <select name="transaction_type">
+                <option value="">All</option>
+                <option value="income" {% if filters.transaction_type=='income' %}selected{% endif %}>
+                    Income
+                </option>
+                <option value="expense" {% if filters.transaction_type=='expense' %}selected{% endif %}>
+                    Expense
+                </option>
+            </select>
+        </label>
+
+        <label>
+            Category
+            <select name="category_id">
+                <option value="">All</option>
+
+                {% for category in categories %}
+                <option value="{{ category['category_id'] }}" {% if filters.category_id==category['category_id']|string
+                    %} selected {% endif %}>
+                    {{ category['category_name'] }}
+                    <!-- ({{ category['category_type'] }}) -->
+                </option>
+                {% endfor %}
+
+            </select>
+        </label>
+
+        <label>
+            From
+            <input type="date" name="start_date" value="{{ filters.start_date }}">
+        </label>
+
+        <label>
+            To
+            <input type="date" name="end_date" value="{{ filters.end_date }}">
+        </label>
+
+        <button type="submit">Filter</button>
+        <a href="{{ url_for('transactions') }}">Clear</a>
+
+    </form>
+</article>
+
+<article class="table-wrap">
+
+    {% if transactions %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th>Account</th>
+                <th>Amount</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for t in transactions %}
+            <tr>
+                <td>{{ t.transaction_date }}</td>
+                <td>{{ t.description }}</td>
+                <td>{{ t.transaction_type|capitalize }}</td>
+                <td>
+                    {% if t.category_name == 'Other' and t.custom_category %}
+                    Other — {{ t.custom_category }}
+                    {% else %}
+                    {{ t.category_name }}
+                    {% endif %}
+                </td>
+                <td>{{ t.account_name }}</td>
+
+                <td>
+                    ${{ '%.2f'|format(t.amount) }}
+                </td>
+
+                <td>Coming soon</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% else %}
+    <p>No matching transactions.</p>
+    {% endif %}
+
+</article>
+
+{% endblock %}

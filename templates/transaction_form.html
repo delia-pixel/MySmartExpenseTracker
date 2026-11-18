@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>{{ 'Edit' if transaction else 'Add' }} transaction</h1>
+
+<article>
+    <form action="{{ url_for('add_transaction') }}" method="POST">
+        <label>
+            Date
+            <input type="date" name="transaction_date"
+                value="{{ transaction.transaction_date if transaction else today }}" required>
+        </label>
+        <label>
+            Transaction type
+            <select id="transaction_type" name="transaction_type" required>
+                <option value="income" {% if transaction and transaction.transaction_type=='income' %} selected{% endif
+                    %}>
+                    Income
+                </option>
+                <option value="expense" {% if not transaction or transaction.transaction_type=='expense' %} selected{%
+                    endif %}>
+                    Expense
+                </option>
+            </select>
+        </label>
+        <label>
+            Category
+            <select id="category_id" name="category_id" required>
+                <option value="">Select a category</option>
+                {% for category in categories %}
+                <option value="{{ category['category_id'] }}" data-type="{{ category['category_type'] }}"
+                    data-name="{{ category['category_name'] }}" {% if transaction and
+                    transaction.category_id==category.category_id %} selected{% endif %}>
+                    {{ category['category_name'] }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label id="custom_category_wrapper" style="display:none;">
+            Specify other category
+            <input id="custom_category" type="text" name="custom_category" maxlength="100"
+                value="{{ transaction.custom_category or '' if transaction else '' }}" placeholder="e.g. Haircut">
+        </label>
+
+        <label>
+            Description
+            <input type="text" name="description" value="{{ transaction.description if transaction else '' }}"
+                maxlength="200" required>
+        </label>
+
+        <label>
+            Amount ($)
+            <input type="number" name="amount" min="0.01" step="0.01"
+                value="{{ '%.2f'|format(transaction.amount) if transaction else '' }}" required>
+        </label>
+
+
+
+
+
+        <label>
+            Account
+            <select name="account_id" required>
+                <option value="">Select an account</option>
+                {% for account in accounts %}
+                <option value="{{ account['account_id'] }}" {% if transaction and
+                    transaction.account_id==account.account_id %} selected{% endif %}>
+                    {{ account['account_name'] }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <div class="actions">
+            <button type="submit">Save transaction</button>
+            <a href="{{ url_for('transactions') }}">Cancel</a>
+        </div>
+    </form>
+</article>
+
+<script>
+    const typeSelect = document.getElementById("transaction_type");
+    const categorySelect = document.getElementById("category_id");
+    const customWrapper = document.getElementById("custom_category_wrapper");
+    const customInput = document.getElementById("custom_category");
+
+    function updateCustomCategory() {
+        const selected = categorySelect.selectedOptions[0];
+        const isOther = selected && selected.dataset.name === "Other";
+
+        customWrapper.style.display = isOther ? "block" : "none";
+        customInput.required = Boolean(isOther);
+
+        if (!isOther) {
+            customInput.value = "";
+        }
+    }
+
+    function updateCategories() {
+        const selectedType = typeSelect.value;
+
+        Array.from(categorySelect.options).forEach(option => {
+            if (!option.value) return;
+
+            option.hidden = option.dataset.type !== selectedType;
+            option.disabled = option.dataset.type !== selectedType;
+        });
+
+        if (categorySelect.selectedOptions[0]?.disabled) {
+            categorySelect.value = "";
+        }
+
+        updateCustomCategory();
+    }
+
+    typeSelect.addEventListener("change", updateCategories);
+    categorySelect.addEventListener("change", updateCustomCategory);
+
+    updateCategories();
+</script>
+
+{% endblock %}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>myExpenseTracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <header>
+    <nav>
+      <a class="brand" href="{{ url_for('home') }}">MySmartExpenseTracker</a>
+      <div>
+        <a href="{{ url_for('home') }}">Dashboard</a>
+        <a href="{{ url_for('transactions') }}">Transactions</a>
+        <a class="button" href="{{ url_for('add_transaction') }}">+ Add transaction</a>
+      </div>
+    </nav>
+  </header>
+  <main>
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+    <p class="alert {{ category }}">{{ message }}</p>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+
+</html>
