@@ -4,19 +4,19 @@
 <p class="muted">Your income, expenses and spending patterns in one place.</p>
 <section class="cards">
   <article><span>Total income</span>
-    <h2>{{ totals.income }}</h2>
+    <h2>{{ total_income }}</h2>
   </article>
   <article><span>Total expenses</span>
-    <h2>{{ totals.expenses }}</h2>
+    <h2>{{ total_expenses }}</h2>
   </article>
   <article><span>Net balance</span>
-    <h2>{{ balance }}</h2>
+    <h2>{{ net_balance }}</h2>
   </article>
   <article><span>Transactions</span>
-    <h2>{{ totals.transaction_count }}</h2>
+    <h2>{{ transaction_count }}</h2>
   </article>
 </section>
-<section class="charts">
+<!-- <section class="charts">
   <article>
     <h2>Monthly income vs expenses</h2>
     {% if monthly_chart_html %}{{ monthly_chart_html|safe }}{% else %}<p class="muted">Monthly chart will appear here.
@@ -52,5 +52,5 @@
   {% else %}<p>No transactions yet. <a href="{{ url_for('add_transaction') }}">Add your first transaction.</a></p>{%
   endif %}
   <p><a href="{{ url_for('transactions') }}">View all transactions</a></p>
-</article>
+</article> -->
 {% endblock %}

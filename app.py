@@ -6,13 +6,52 @@ from decimal import Decimal, InvalidOperation
 
 app= Flask(__name__)
 
-@app.route('/')
+@app.route("/")
 def home():
-    income=5000
-    expenses=3200
-    balance=income-expenses
-    transaction_count=12
-    return render_template('index.html', income=income, expenses=expenses,balance=balance, transaction_count=transaction_count)
+    conn = get_db_connection()
+
+    # Calculate total amount for each transaction type
+    totals = conn.execute("""
+        SELECT
+            transaction_type,
+            SUM(amount) AS total
+        FROM transactions
+        GROUP BY transaction_type
+    """).fetchall()
+
+    # Initialize totals
+    total_income = 0
+    total_expenses = 0
+
+    # Separate income and expense totals
+    for t in totals:
+        if t["transaction_type"] == "income":
+            total_income = t["total"]
+        elif t["transaction_type"] == "expense":
+            total_expenses = t["total"]
+
+    # Calculate net balance
+    net_balance = total_income - total_expenses
+
+    # Count all transactions
+    result = conn.execute("""
+        SELECT COUNT(*) AS transaction_count
+        FROM transactions
+    """).fetchone()
+
+    transaction_count = result["transaction_count"]
+
+    # Close database connection
+    conn.close()
+
+    # Pass calculated values to the dashboard template
+    return render_template(
+        "index.html",
+        total_income=total_income,
+        total_expenses=total_expenses,
+        net_balance=net_balance,
+        transaction_count=transaction_count
+    )
 
 
 @app.route("/transactions")
@@ -61,16 +100,18 @@ def transactions():
 @app.route("/add-transaction", methods=["GET", "POST"])
 def add_transaction():
     conn = get_db_connection()
-
+    # Get all categories
     categories = conn.execute(
         "SELECT * FROM categories ORDER BY category_name"
     ).fetchall()
 
+    # Get all accounts 
     accounts = conn.execute(
         "SELECT * FROM accounts ORDER BY account_name"
     ).fetchall()
 
     if request.method == "POST":
+        # Get input elements by form input names
         transaction_date = request.form.get("transaction_date", "")
         description = request.form.get("description", "").strip()
         amount_text = request.form.get("amount", "")
@@ -79,7 +120,7 @@ def add_transaction():
         account_id = request.form.get("account_id", "")
         custom_category = request.form.get("custom_category", "").strip()
 
-        # Input validation
+        # Validate the inputs
         # Variable to store errors
         error = None
 
@@ -94,7 +135,7 @@ def add_transaction():
             # Handle zero, negative and infinite amount
             if not amount.is_finite() or amount <= 0:
                 error = "Amount must be greater than zero."
-            # Ensures we have 2 decimal point number for amount    
+            # 2 decimal point number for amount    
             elif amount.as_tuple().exponent < -2:
                 error = "Amount can have at most two decimal places."
         except InvalidOperation:
@@ -110,7 +151,7 @@ def add_transaction():
         if transaction_type not in ("income", "expense"):
             error = "Invalid transaction type."
 
-        # Select Categories for the 
+        # Select first matching row or none to validate the selected category
         category = conn.execute(
             "SELECT * FROM categories WHERE category_id = ?",
             (category_id,)
@@ -127,6 +168,7 @@ def add_transaction():
         if account is None:
             error = "Please select a valid account."
 
+        # Ensure there is is a custom category in case no category is selected
         if category is not None:
             if category["category_name"] == "Other":
                 if not custom_category:
