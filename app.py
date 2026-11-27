@@ -4,8 +4,17 @@ from database import get_db_connection
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from validators import validate_transaction
+from PIL import Image, UnidentifiedImageError
+from receipt_ocr import process_receipt
 
 app= Flask(__name__)
+
+# Receipt upload configuration
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+
+ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "JPG"}
+MAX_IMAGE_PIXELS = 12_000_000
+
 
 @app.route("/")
 def home():
