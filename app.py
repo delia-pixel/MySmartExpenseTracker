@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for
 from database import get_db_connection
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from validators import validate_transaction
 
 app= Flask(__name__)
 
@@ -56,13 +57,29 @@ def home():
 
 @app.route("/transactions")
 def transactions():
+
+    filters = {
+        "transaction_type": request.args.get("transaction_type", ""),
+        "category_id": request.args.get("category_id", ""),
+        "account_id": request.args.get("account_id", ""),
+        "start_date": request.args.get("start_date", ""),
+        "end_date": request.args.get("end_date", "")
+    }
+
     conn = get_db_connection()
 
     categories = conn.execute(
         "SELECT * FROM categories ORDER BY category_name"
     ).fetchall()
 
-    transactions_list = conn.execute("""
+    accounts= conn.execute(
+        "SELECT * FROM accounts ORDER BY account_name"
+    ).fetchall()
+
+
+    
+
+    query = """
         SELECT
             t.transaction_id,
             t.transaction_date,
@@ -78,20 +95,50 @@ def transactions():
             ON t.category_id = c.category_id
         JOIN accounts a
             ON t.account_id = a.account_id
-        ORDER BY t.transaction_date DESC
-    """).fetchall()
+            WHERE 1=1
+    """
+
+    params=[]
+
+    # Filter by transaction type
+    if filters["transaction_type"]:
+        query += " AND t.transaction_type = ?"
+        params.append(filters["transaction_type"])
+
+    # Filter by account
+    if filters["account_id"]:
+        query += " AND t.account_id = ?"
+        params.append(filters["account_id"])
+
+    # Filter by category
+    if filters["category_id"]:
+        query += " AND c.category_id = ?"
+        params.append(filters["category_id"])
+
+    # Filter by start date
+    if filters["start_date"]:
+        query += " AND t.transaction_date >= ?"
+        params.append(filters["start_date"])
+
+    # Filter by end date
+    if filters["end_date"]:
+        query += " AND t.transaction_date <= ?"
+        params.append(filters["end_date"])
+
+    # print(query)
+    # print(params)   
+
+    query += " ORDER BY t.transaction_date DESC, t.transaction_id DESC"
+
+    transactions_list=conn.execute(query, params).fetchall()
 
     conn.close()
 
-    filters = {
-        "transaction_type": request.args.get("transaction_type", ""),
-        "category_id": request.args.get("category_id", ""),
-        "start_date": request.args.get("start_date", ""),
-        "end_date": request.args.get("end_date", "")
-    }
+   
 
     return render_template(
         "transactions.html",
+        accounts=accounts,
         transactions=transactions_list,
         categories=categories,
         filters=filters
@@ -100,88 +147,30 @@ def transactions():
 @app.route("/add-transaction", methods=["GET", "POST"])
 def add_transaction():
     conn = get_db_connection()
+
     # Get all categories
     categories = conn.execute(
         "SELECT * FROM categories ORDER BY category_name"
     ).fetchall()
 
-    # Get all accounts 
+    # Get all accounts
     accounts = conn.execute(
         "SELECT * FROM accounts ORDER BY account_name"
     ).fetchall()
 
     if request.method == "POST":
-        # Get input elements by form input names
-        transaction_date = request.form.get("transaction_date", "")
-        description = request.form.get("description", "").strip()
-        amount_text = request.form.get("amount", "")
-        transaction_type = request.form.get("transaction_type", "")
-        category_id = request.form.get("category_id", "")
-        account_id = request.form.get("account_id", "")
-        custom_category = request.form.get("custom_category", "").strip()
 
-        # Validate the inputs
-        # Variable to store errors
-        error = None
+        # Extract and validate the inputs
+        transaction_data, error = validate_transaction(
+            conn, request.form
+        )
 
-        # Validate date 
-        try:
-            date.fromisoformat(transaction_date)
-        except ValueError:
-            error = "Please enter a valid date."
-
-        try:
-            amount = Decimal(amount_text)
-            # Handle zero, negative and infinite amount
-            if not amount.is_finite() or amount <= 0:
-                error = "Amount must be greater than zero."
-            # 2 decimal point number for amount    
-            elif amount.as_tuple().exponent < -2:
-                error = "Amount can have at most two decimal places."
-        except InvalidOperation:
-            amount = None
-            error = "Please enter a valid amount."
-
-        if not description:
-            error = "Description is required."
-
-        if len(description) > 200:
-            error = "Description must be 200 characters or fewer."
-
-        if transaction_type not in ("income", "expense"):
-            error = "Invalid transaction type."
-
-        # Select first matching row or none to validate the selected category
-        category = conn.execute(
-            "SELECT * FROM categories WHERE category_id = ?",
-            (category_id,)
-        ).fetchone() if category_id.isdigit() else None
-
-        account = conn.execute(
-            "SELECT * FROM accounts WHERE account_id = ?",
-            (account_id,)
-        ).fetchone() if account_id.isdigit() else None
-
-        if category is None or category["category_type"] != transaction_type:
-            error = "Please select a valid category for this type."
-
-        if account is None:
-            error = "Please select a valid account."
-
-        # Ensure there is is a custom category in case no category is selected
-        if category is not None:
-            if category["category_name"] == "Other":
-                if not custom_category:
-                    error = "Please specify the other category."
-                elif len(custom_category) > 100:
-                    error = "Other category must be 100 characters or fewer."
-            else:
-                custom_category = None
-
+        # Handle validation errors
         if error:
             conn.close()
             return error, 400
 
+        # Insert the validated transaction
         conn.execute("""
             INSERT INTO transactions (
                 transaction_date,
@@ -194,13 +183,13 @@ def add_transaction():
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
-            transaction_date,
-            description,
-            float(amount),
-            transaction_type,
-            int(category_id),
-            int(account_id),
-            custom_category
+            transaction_data["transaction_date"],
+            transaction_data["description"],
+            transaction_data["amount"],
+            transaction_data["transaction_type"],
+            transaction_data["category_id"],
+            transaction_data["account_id"],
+            transaction_data["custom_category"]
         ))
 
         conn.commit()
@@ -208,6 +197,7 @@ def add_transaction():
 
         return redirect(url_for("transactions"))
 
+    # Handle GET request
     conn.close()
 
     return render_template(
@@ -218,6 +208,105 @@ def add_transaction():
         accounts=accounts
     )
 
+@app.route("/edit/<int:transaction_id>", methods=["GET","POST"])
+def edit_transaction(transaction_id):
+    conn=get_db_connection()
+
+    transaction=conn.execute("""
+        SELECT * 
+        FROM transactions 
+        WHERE transaction_id=?
+   
+    """, (transaction_id,)
+    ).fetchone()
+
+    # Check if the transaction exists
+    if transaction is None:
+        conn.close()
+        return "Transaction not found.", 404
+    
+    # Retrieve all categories
+    categories = conn.execute(
+        "SELECT * FROM categories ORDER BY category_name"
+    ).fetchall()
+
+    # Retrieve all accounts
+    accounts = conn.execute(
+        "SELECT * FROM accounts ORDER BY account_name"
+    ).fetchall()
+
+    if request.method == "POST":
+
+        # Validate the updated transaction
+        transaction_data, error = validate_transaction(
+            conn, request.form
+        )
+
+        if error:
+            conn.close()
+            return error, 400
+
+        # Update the transaction
+        conn.execute("""
+            UPDATE transactions
+            SET
+                transaction_date = ?,
+                description = ?,
+                amount = ?,
+                transaction_type = ?,
+                category_id = ?,
+                account_id = ?,
+                custom_category = ?
+            WHERE transaction_id = ?
+        """, (
+            transaction_data["transaction_date"],
+            transaction_data["description"],
+            transaction_data["amount"],
+            transaction_data["transaction_type"],
+            transaction_data["category_id"],
+            transaction_data["account_id"],
+            transaction_data["custom_category"],
+            transaction_id
+        ))
+
+        conn.commit()
+        conn.close()
+        return redirect(url_for("transactions"))
+
+    conn.close()
+    return render_template(
+        "transaction_form.html",
+        transaction=transaction,
+        today=date.today().isoformat(),
+        categories=categories,
+        accounts=accounts
+    )
+
+@app.route("/delete/<int:transaction_id>", methods=["POST"])
+def delete_transaction(transaction_id):
+    conn = get_db_connection()
+
+    # Check whether the transaction exists
+    transaction = conn.execute("""
+        SELECT transaction_id
+        FROM transactions
+        WHERE transaction_id = ?
+    """, (transaction_id,)).fetchone()
+
+    if transaction is None:
+        conn.close()
+        return "Transaction not found.", 404
+
+    # Delete the selected transaction
+    conn.execute("""
+        DELETE FROM transactions
+        WHERE transaction_id = ?
+    """, (transaction_id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("transactions"))
 
 if __name__=="__main__":
     app.run(debug=True)
