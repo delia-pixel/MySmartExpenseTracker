@@ -67,14 +67,15 @@ def init_db():
         ("Gift", "income"),
         ("Other", "income"),
 
-        ("Food", "expense"),
+        ("Food & Groceries", "expense"),
         ("Housing", "expense"),
         ("Transportation", "expense"),
         ("Shopping", "expense"),
         ("Utilities", "expense"),
         ("Healthcare", "expense"),
         ("Entertainment", "expense"),
-        ("Other", "expense")
+        ("Other", "expense"),
+        ('Refund', 'income')
     ]
 
     conn.executemany("""

@@ -3,6 +3,8 @@ from database import get_db_connection
 
 conn = get_db_connection()
 
+
+
 # Check the existing columns
 columns = conn.execute(
     "PRAGMA table_info(transactions)"
@@ -42,3 +44,6 @@ for column in columns:
 conn.close()
 
 print("\nDatabase updated successfully!")
+
+
+

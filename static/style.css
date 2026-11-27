@@ -197,3 +197,216 @@ button,
 .delete-btn:hover {
   background-color: #b91c1c;
 }
+.receipt-section {
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+  background-color: #f8fafc;
+}
+
+.receipt-section h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.receipt-section form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.receipt-section small {
+  color: #64748b;
+}
+
+.ocr-success,
+.ocr-warning,
+.ocr-error {
+  padding: 12px 16px;
+  margin-top: 15px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.ocr-success {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.ocr-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.ocr-error {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.ocr-warning ul {
+  padding-left: 20px;
+  margin-bottom: 0;
+}
+
+#scan-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* ==============================
+   Transaction page layout
+   ============================== */
+
+.transaction-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 20px;
+}
+
+.transaction-layout.edit-layout {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 700px;
+}
+
+/* Both panels */
+
+.transaction-layout > .receipt-section,
+.transaction-layout > .transaction-details {
+  min-width: 0;
+  margin: 0;
+  padding: 24px;
+  border: 1px solid #dbe3ed;
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-sizing: border-box;
+}
+
+/* Receipt upload */
+
+.receipt-section form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.receipt-section input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#scan-button {
+  width: 100%;
+}
+
+/* Receipt preview */
+
+.receipt-preview-container {
+  margin-top: 24px;
+}
+
+.receipt-preview-container[hidden] {
+  display: none;
+}
+
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.preview-toolbar h4 {
+  margin: 0;
+}
+
+.preview-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.preview-controls button {
+  padding: 6px 12px;
+  border: 1px solid #dbe3ed;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.preview-controls button:hover {
+  background-color: #f1f5f9;
+}
+
+/* Scrollable image viewer */
+
+.receipt-viewer {
+  height: 420px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #dbe3ed;
+  border-radius: 8px;
+  background-color: #e9edf3;
+}
+
+#receipt-preview {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  margin: 0 auto;
+  transform-origin: center;
+}
+
+/* Transaction form */
+
+.transaction-details form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transaction-details input,
+.transaction-details select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.transaction-details label {
+  display: block;
+  font-weight: 500;
+  margin: 0;
+}
+
+.transaction-details .actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* Responsive layout */
+
+@media (max-width: 768px) {
+  .transaction-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .receipt-viewer {
+    height: 350px;
+  }
+
+  .transaction-layout > .receipt-section,
+  .transaction-layout > .transaction-details {
+    padding: 16px;
+  }
+}

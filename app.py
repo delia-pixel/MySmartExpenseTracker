@@ -1,10 +1,12 @@
 
 from flask import Flask, render_template, request, redirect, url_for
 from database import get_db_connection
-from datetime import date
+from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from validators import validate_transaction
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError, ImageOps
+import base64
+from io import BytesIO
 from receipt_ocr import process_receipt
 
 app= Flask(__name__)
@@ -12,7 +14,7 @@ app= Flask(__name__)
 # Receipt upload configuration
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
-ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "JPG"}
+ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG"}
 MAX_IMAGE_PIXELS = 12_000_000
 
 
@@ -153,19 +155,47 @@ def transactions():
         filters=filters
     )
 
+def render_add_transaction_form(
+    prefill=None,
+    ocr_warnings=None,
+    upload_error=None,
+    receipt_preview=None
+):
+
+    conn = get_db_connection()
+
+    try:
+
+        categories = conn.execute(
+            "SELECT * FROM categories"
+        ).fetchall()
+
+        accounts = conn.execute(
+            "SELECT * FROM accounts"
+        ).fetchall()
+
+    finally:
+
+        conn.close()
+
+    return render_template(
+        "transaction_form.html",
+        transaction=None,
+        today=datetime.now().strftime("%Y-%m-%d"),
+        categories=categories,
+        accounts=accounts,
+        prefill=prefill,
+        ocr_warnings=ocr_warnings or [],
+        upload_error=upload_error,
+        receipt_preview=receipt_preview
+    )
+
+
 @app.route("/add-transaction", methods=["GET", "POST"])
 def add_transaction():
     conn = get_db_connection()
 
-    # Get all categories
-    categories = conn.execute(
-        "SELECT * FROM categories ORDER BY category_name"
-    ).fetchall()
-
-    # Get all accounts
-    accounts = conn.execute(
-        "SELECT * FROM accounts ORDER BY account_name"
-    ).fetchall()
+    
 
     if request.method == "POST":
 
@@ -209,12 +239,90 @@ def add_transaction():
     # Handle GET request
     conn.close()
 
-    return render_template(
-        "transaction_form.html",
-        transaction=None,
-        today=date.today().isoformat(),
-        categories=categories,
-        accounts=accounts
+    return render_add_transaction_form()
+
+
+
+def generate_receipt_preview(image):
+    preview = ImageOps.exif_transpose(image).convert("RGB")
+    preview.thumbnail((2000, 3000))
+    with BytesIO() as buffer:
+        preview.save(buffer, format="JPEG", quality=90)
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
+
+
+@app.route("/scan-receipt", methods=["POST"])
+def scan_receipt():
+
+    receipt = request.files.get("receipt")
+
+    # Validate that a file was uploaded
+    if not receipt or not receipt.filename:
+
+        return render_add_transaction_form(
+            upload_error="Please select a receipt image."
+        ), 400
+
+    try:
+
+        # Open the uploaded image
+        with Image.open(receipt.stream) as image:
+
+            # Validate the actual image format
+            if image.format not in ALLOWED_IMAGE_FORMATS:
+
+                return render_add_transaction_form(
+                    upload_error="Only JPEG and PNG images are supported."
+                ), 400
+
+            # Validate image dimensions
+            width, height = image.size
+
+            if width * height > MAX_IMAGE_PIXELS:
+
+                return render_add_transaction_form(
+                    upload_error="The image dimensions are too large."
+                ), 400
+
+            # Run our OCR pipeline
+            receipt_preview = generate_receipt_preview(image)
+            result = process_receipt(image)
+
+    except (
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+        OSError
+    ):
+
+        return render_add_transaction_form(
+            upload_error="The uploaded file could not be processed."
+        ), 400
+
+    except Exception:
+
+        app.logger.exception("Receipt OCR processing failed")
+
+        return render_add_transaction_form(
+            upload_error=(
+                "Receipt recognition failed. "
+                "Please try another image or enter the transaction manually."
+            )
+        ), 500
+
+    # Prepare extracted information
+    prefill = {
+        "description": result["description"],
+        "amount": result["amount"],
+        "transaction_date": result["transaction_date"],
+        "transaction_type": result["transaction_type"]
+    }
+
+    # Display the transaction form
+    return render_add_transaction_form(
+        prefill=prefill,
+        receipt_preview=receipt_preview,
+        ocr_warnings=result["warnings"]
     )
 
 @app.route("/edit/<int:transaction_id>", methods=["GET","POST"])
@@ -317,5 +425,14 @@ def delete_transaction(transaction_id):
 
     return redirect(url_for("transactions"))
 
-if __name__=="__main__":
+
+
+@app.errorhandler(413)
+def file_too_large(error):
+
+    return render_add_transaction_form(
+        upload_error="The upload exceeds the 10 MB request limit."
+    ), 413
+
+if __name__ == "__main__":
     app.run(debug=True)

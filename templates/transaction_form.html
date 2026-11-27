@@ -1,86 +1,336 @@
 {% extends 'base.html' %}
 {% block content %}
+<style>
+    .transaction-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+        gap: 24px;
+        align-items: start;
+        margin-top: 20px
+    }
+
+    .transaction-layout.edit-layout {
+        grid-template-columns: minmax(0, 1fr);
+        max-width: 700px
+    }
+
+    .transaction-layout>.receipt-section,
+    .transaction-layout>.transaction-details {
+        min-width: 0;
+        margin: 0;
+        padding: 24px;
+        border: 1px solid #dbe3ed;
+        border-radius: 12px;
+        background: #fff;
+        box-sizing: border-box
+    }
+
+    .transaction-layout h2,
+    .transaction-layout h3 {
+        margin-top: 0
+    }
+
+    .transaction-layout form {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        width: 100%;
+        max-width: none
+    }
+
+    .transaction-layout input,
+    .transaction-layout select {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box
+    }
+
+    .transaction-details label {
+        display: block;
+        margin: 0;
+        font-weight: 500
+    }
+
+    .transaction-details .actions {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 12px
+    }
+
+    #receipt-preview-container {
+        margin-top: 20px
+    }
+
+    #receipt-preview-container[hidden] {
+        display: none
+    }
+
+    .preview-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px
+    }
+
+    .preview-toolbar h4 {
+        margin: 0
+    }
+
+    .preview-controls {
+        display: flex;
+        gap: 6px
+    }
+
+    .preview-controls button {
+        padding: 6px 10px;
+        background: #fff;
+        color: #334155;
+        border: 1px solid #dbe3ed;
+        border-radius: 6px;
+        cursor: pointer
+    }
+
+    .receipt-viewer {
+        height: 420px;
+        overflow: auto;
+        background: #e9edf3;
+        border: 1px solid #dbe3ed;
+        border-radius: 8px
+    }
+
+    #preview-stage {
+        position: relative;
+        margin: 0 auto
+    }
+
+    #receipt-preview {
+        position: absolute;
+        display: block;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        transform-origin: center
+    }
+
+    #preview-status {
+        font-size: 13px;
+        color: #64748b
+    }
+
+    @media(max-width:768px) {
+        .transaction-layout {
+            grid-template-columns: minmax(0, 1fr)
+        }
+
+        .receipt-viewer {
+            height: 350px
+        }
+
+        .transaction-layout>.receipt-section,
+        .transaction-layout>.transaction-details {
+            padding: 16px
+        }
+    }
+</style>
+
+
+{% set prefill = prefill | default(none) %}
+
+{% if transaction %}
+
+{% set form_date = transaction.transaction_date %}
+{% set form_description = transaction.description %}
+{% set form_amount = transaction.amount %}
+{% set form_type = transaction.transaction_type %}
+
+{% elif prefill %}
+
+{% set form_date = prefill.transaction_date or '' %}
+{% set form_description = prefill.description or '' %}
+{% set form_amount = prefill.amount %}
+{% set form_type = prefill.transaction_type or '' %}
+
+{% else %}
+
+{% set form_date = today %}
+{% set form_description = '' %}
+{% set form_amount = none %}
+{% set form_type = 'expense' %}
+
+{% endif %}
 
 <h1>{{ 'Edit' if transaction else 'Add' }} transaction</h1>
+<div class="transaction-layout {{ 'edit-layout' if transaction else '' }}">
+    {% if not transaction %}
 
-<article>
-    <form action="{{ url_for('edit_transaction', transaction_id=transaction.transaction_id)
+    <section class="receipt-section">
+
+        <h3>Scan a receipt</h3>
+
+        <p>
+            Upload a receipt to automatically extract
+            the merchant, transaction date and amount.
+        </p>
+
+        <form action="{{ url_for('scan_receipt') }}" method="POST" enctype="multipart/form-data" id="receipt-form">
+
+            <input type="file" name="receipt" id="receipt" accept="image/jpeg,image/png" required>
+
+            <button type="submit" id="scan-button">
+                Scan receipt
+            </button>
+
+        </form>
+
+        <small>
+            Supported formats: JPG, JPEG, PNG.
+            Maximum upload size: 10 MB.
+        </small>
+        {% if upload_error %}
+        <div class="ocr-error">
+            {{ upload_error }}
+        </div>
+        {% endif %}
+
+        {% if prefill %}
+
+        <div class="ocr-success">
+            Receipt processed. Please review and
+            complete the transaction information below.
+        </div>
+
+        {% if ocr_warnings %}
+
+        <div class="ocr-warning">
+
+            <strong>Information requiring attention:</strong>
+
+            <ul>
+                {% for warning in ocr_warnings %}
+                <li>{{ warning }}</li>
+                {% endfor %}
+            </ul>
+
+        </div>
+
+        {% endif %}
+
+        {% endif %}
+
+        <div id="receipt-preview-container" {% if not receipt_preview %}hidden{% endif %}>
+            <div class="preview-toolbar">
+                <h4>Receipt preview</h4>
+                <div class="preview-controls">
+                    <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+                    <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+                    <button type="button" id="rotate-image" aria-label="Rotate clockwise">↻</button>
+                    <button type="button" id="reset-preview">Reset</button>
+                </div>
+            </div>
+            <div class="receipt-viewer" id="receipt-viewer">
+                <div id="preview-stage">
+                    <img id="receipt-preview" {% if receipt_preview %}src="{{ receipt_preview }}" {% endif %}
+                        alt="Uploaded receipt">
+                </div>
+            </div>
+            <small>Zoom, rotate or scroll to verify the receipt.</small>
+            <p id="preview-status" role="status"></p>
+        </div>
+
+
+
+    </section>
+
+    {% endif %}
+
+
+
+    <article class="transaction-details">
+        <h2>Transaction details</h2>
+        <form action="{{ url_for('edit_transaction', transaction_id=transaction.transaction_id)
                 if transaction else url_for('add_transaction') }}" method="POST">
-        <label>
-            Date
-            <input type="date" name="transaction_date"
-                value="{{ transaction.transaction_date if transaction else today }}" required>
-        </label>
-        <label>
-            Transaction type
+            <label for="transaction_date">Date</label>
+
+            <input type="date" id="transaction_date" name="transaction_date" value="{{ form_date }}" required>
+            <label for="transaction_type">
+                Transaction type
+            </label>
+
             <select id="transaction_type" name="transaction_type" required>
-                <option value="income" {% if transaction and transaction.transaction_type=='income' %} selected{% endif
-                    %}>
-                    Income
+
+                <option value="" disabled {% if not form_type %}selected{% endif %}>
+                    Select transaction type
                 </option>
-                <option value="expense" {% if not transaction or transaction.transaction_type=='expense' %} selected{%
-                    endif %}>
+
+                <option value="expense" {% if form_type=='expense' %}selected{% endif %}>
                     Expense
                 </option>
-            </select>
-        </label>
-        <label>
-            Category
-            <select id="category_id" name="category_id" required>
-                <option value="">Select a category</option>
-                {% for category in categories %}
-                <option value="{{ category['category_id'] }}" data-type="{{ category['category_type'] }}"
-                    data-name="{{ category['category_name'] }}" {% if transaction and
-                    transaction.category_id==category.category_id %} selected{% endif %}>
-                    {{ category['category_name'] }}
+
+                <option value="income" {% if form_type=='income' %}selected{% endif %}>
+                    Income
                 </option>
-                {% endfor %}
+
             </select>
-        </label>
+            <label>
+                Category
+                <select id="category_id" name="category_id" required>
+                    <option value="">Select a category</option>
+                    {% for category in categories %}
+                    <option value="{{ category['category_id'] }}" data-type="{{ category['category_type'] }}"
+                        data-name="{{ category['category_name'] }}" {% if transaction and
+                        transaction.category_id==category.category_id %} selected{% endif %}>
+                        {{ category['category_name'] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
 
-        <label id="custom_category_wrapper" style="display:none;">
-            Specify other category
-            <input id="custom_category" type="text" name="custom_category" maxlength="100"
-                value="{{ transaction.custom_category or '' if transaction else '' }}" placeholder="e.g. Haircut">
-        </label>
+            <label id="custom_category_wrapper" style="display:none;">
+                Specify other category
+                <input id="custom_category" type="text" name="custom_category" maxlength="100"
+                    value="{{ transaction.custom_category or '' if transaction else '' }}" placeholder="e.g. Haircut">
+            </label>
 
-        <label>
-            Description
-            <input type="text" name="description" value="{{ transaction.description if transaction else '' }}"
-                maxlength="200" required>
-        </label>
+            <label for="description">Description</label>
 
-        <label>
-            Amount ($)
-            <input type="number" name="amount" min="0.01" step="0.01"
-                value="{{ '%.2f'|format(transaction.amount) if transaction else '' }}" required>
-        </label>
+            <input type="text" id="description" name="description" value="{{ form_description }}" maxlength="200"
+                required>
+
+            <label for="amount">Amount</label>
+
+            <input type="number" id="amount" name="amount" min="0.01" step="0.01"
+                value="{{ '%.2f' | format(form_amount) if form_amount is not none else '' }}" required>
 
 
 
 
 
-        <label>
-            Account
-            <select name="account_id" required>
-                <option value="">Select an account</option>
-                {% for account in accounts %}
-                <option value="{{ account['account_id'] }}" {% if transaction and
-                    transaction.account_id==account.account_id %} selected{% endif %}>
-                    {{ account['account_name'] }}
-                </option>
-                {% endfor %}
-            </select>
-        </label>
+            <label>
+                Account
+                <select name="account_id" required>
+                    <option value="">Select an account</option>
+                    {% for account in accounts %}
+                    <option value="{{ account['account_id'] }}" {% if transaction and
+                        transaction.account_id==account.account_id %} selected{% endif %}>
+                        {{ account['account_name'] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
 
-        <div class="actions">
-            <button type="submit">
-                {{ 'Save changes' if transaction else 'Add transaction' }}
-            </button>
-            <a href="{{ url_for('transactions') }}">Cancel</a>
-        </div>
-    </form>
-</article>
+            <div class="actions">
+                <button type="submit">
+                    {{ 'Save changes' if transaction else 'Add transaction' }}
+                </button>
+                <a href="{{ url_for('transactions') }}">Cancel</a>
+            </div>
+        </form>
+    </article>
+</div>
 
 <script>
     const typeSelect = document.getElementById("transaction_type");
@@ -121,6 +371,74 @@
     categorySelect.addEventListener("change", updateCustomCategory);
 
     updateCategories();
+
+    const receiptForm = document.getElementById("receipt-form");
+
+    if (receiptForm) {
+
+        receiptForm.addEventListener("submit", function () {
+
+            const scanButton = document.getElementById("scan-button");
+
+            scanButton.disabled = true;
+
+            scanButton.textContent = "Processing receipt...";
+
+        });
+
+    }
+
+    // Receipt preview: reserve the rotated image's full bounding box.
+    const receiptInput = document.getElementById("receipt");
+    const previewImage = document.getElementById("receipt-preview");
+    const previewContainer = document.getElementById("receipt-preview-container");
+    const viewer = document.getElementById("receipt-viewer");
+    const stage = document.getElementById("preview-stage");
+    let zoom = 1, rotation = 0, objectUrl = null;
+
+    function updatePreview() {
+        if (!previewImage.naturalWidth) return;
+        const sideways = rotation % 180 !== 0;
+        const ratio = previewImage.naturalHeight / previewImage.naturalWidth;
+        const width = Math.max(1, viewer.clientWidth - 24) * zoom / (sideways ? ratio : 1);
+        const height = width * ratio;
+        const boxWidth = sideways ? height : width;
+        const boxHeight = sideways ? width : height;
+        stage.style.width = `${boxWidth + 24}px`;
+        stage.style.height = `${boxHeight + 24}px`;
+        previewImage.style.width = `${width}px`;
+        previewImage.style.height = `${height}px`;
+        previewImage.style.left = `${12 + (boxWidth - width) / 2}px`;
+        previewImage.style.top = `${12 + (boxHeight - height) / 2}px`;
+        previewImage.style.transform = `rotate(${rotation}deg)`;
+    }
+
+    if (receiptInput && previewImage) {
+        previewImage.addEventListener("load", updatePreview);
+        window.addEventListener("resize", updatePreview);
+        receiptInput.addEventListener("change", function () {
+            const file = this.files[0];
+            if (!file) return;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            objectUrl = null;
+            if (!/\.(jpe?g|png)$/i.test(file.name) || file.size > 10 * 1024 * 1024) {
+                previewContainer.hidden = true;
+                previewImage.removeAttribute("src");
+                return;
+            }
+            objectUrl = URL.createObjectURL(file);
+            zoom = 1; rotation = 0;
+            previewContainer.hidden = false;
+            previewImage.src = objectUrl;
+            document.getElementById("preview-status").textContent = "New receipt selected. Scan it to update the transaction fields.";
+        });
+        document.getElementById("zoom-in").onclick = () => { zoom = Math.min(3, zoom + .25); updatePreview(); };
+        document.getElementById("zoom-out").onclick = () => { zoom = Math.max(.5, zoom - .25); updatePreview(); };
+        document.getElementById("rotate-image").onclick = () => { rotation = (rotation + 90) % 360; updatePreview(); };
+        document.getElementById("reset-preview").onclick = () => { zoom = 1; rotation = 0; updatePreview(); };
+        if (previewImage.complete) updatePreview();
+    }
+
 </script>
 
 {% endblock %}
